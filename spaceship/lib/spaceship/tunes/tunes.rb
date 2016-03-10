@@ -23,6 +23,10 @@ require 'spaceship/tunes/tester'
 require 'spaceship/tunes/app_details'
 require 'spaceship/tunes/pricing_tier'
 
+# Analytics
+require 'spaceship/tunes/analytics/analytics'
+
+
 # File Uploads
 require 'spaceship/du/utilities'
 require 'spaceship/du/upload_file'

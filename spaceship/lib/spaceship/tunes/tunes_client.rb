@@ -42,6 +42,26 @@ module Spaceship
       "https://itunesconnect.apple.com/WebObjects/iTunesConnect.woa/"
     end
 
+    def app_analytics(apple_id)
+      return AppAnalytics.new(self, apple_id)
+    end
+
+    # take the json request payload and passes it to the analytics service API v1
+    # returns the json as a Hash, without further interpreting it
+    # FIXME
+    def analytics_request_v1(method, path, request_json)
+      puts request_json
+      url = "https://analytics.itunes.apple.com/analytics/api/v1/#{path}"
+      r = request(method) do |req|
+        req.url url
+        req.body = request_json
+        req.headers['Content-Type'] = 'application/json'
+        req.headers['Referer'] = 'https://analytics.itunes.apple.com/'
+        req.headers['X-Requested-By'] = 'analytics.itunes.apple.com'
+      end
+      data = parse_response(r)
+    end
+
     # @return (Array) A list of all available teams
     def teams
       return @teams if @teams
