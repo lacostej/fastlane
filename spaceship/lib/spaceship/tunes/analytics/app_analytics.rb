@@ -78,15 +78,17 @@ module Spaceship
 
     module ALTERNATIVE_DESIGNS
       # specific interface
+      # measures = ['units', 'installs', 'sessions']
+      # client.time_series1(measures: measures, start_time: start_t, end_time: end_t, frequency: "DAY")
       def time_series(measures: nil, start_time: nil, end_time: nil, frequency: nil)
       end
 
-      # more generic
-      # user can build his json, a hash
-      # or a QOBuilder that implements to_json
+      # more generic, allow multiple input
+      # user can pass his json, a hash, or a QueryObjectBuilder that implements to_json
       # and use metaprogramming for a natural interfae
-      # e.g. app_analytics.time_series(QOB.new.measures(['installs', 'sessions']).last_7_days)
-      # e.g. app_analytics.time_series(QOB.new(measures: ['installs', 'sessions'], start_time: xxx, end_time: yyy, frequency: ...))
+      # measures = ['units', 'installs', 'sessions']
+      # client.time_series2(QOB.new.measures(measures).last_7_days)
+      # client.time_series2(Hash.new.merge(measures: measures, start_time: xxx, end_time: yyy, frequency: "DAY"))
       def time_series(query_object)
         # query is either string or respond to to_json
         analytics_request(:post, "data/time-series", as_json(query_object))
@@ -94,12 +96,15 @@ module Spaceship
     end
 
     # PROTOTYPE
-
-    def time_series(measures: nil, start_time: nil, end_time: nil, frequency: nil)
+    def time_series1(measures: nil, start_time: nil, end_time: nil, frequency: nil)
       analytics_request(
         :post, "data/time-series",
         request_data(measures: measures, start_time: start_time, end_time: end_time, frequency: frequency)
       )
+    end
+
+    def time_series2(query_object)
+      analytics_request( :post, "data/time-series", query_object)
     end
 
     def sources_domainreferrer(measures: nil, start_time: nil, end_time: nil, frequency: nil)
@@ -134,8 +139,17 @@ module Spaceship
       }
     end
 
+    # @param request_data: a string or an object that can be turned into a json
     def analytics_request(method, path, request_data)
-      @tunes_client.analytics_request_v1(method, path, request_data.to_json)
+      json = nil
+      json = request_data if request_data.is_a? String
+      if request_data.is_a? QOB
+        request_data.adam_id([@apple_id])
+      elsif request_data.is_a? Hash
+        request_data[:adamId] = [@apple_id]
+      end
+      json = request_data.to_json if request_data.respond_to?('to_json')
+      @tunes_client.analytics_request_v1(method, path, json)
       # FIXME parse errors ?
     end
   end

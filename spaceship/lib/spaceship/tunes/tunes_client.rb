@@ -50,7 +50,7 @@ module Spaceship
     # returns the json as a Hash, without further interpreting it
     # FIXME
     def analytics_request_v1(method, path, request_json)
-      puts request_json
+      puts "REQ: #{request_json}"
       url = "https://analytics.itunes.apple.com/analytics/api/v1/#{path}"
       r = request(method) do |req|
         req.url url
