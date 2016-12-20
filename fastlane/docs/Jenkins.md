@@ -5,7 +5,7 @@ Deploying from your own computer isn't cool. You know what's cool? Letting a rem
 
 `fastlane` automatically generates a JUnit report for you. This allows Continuous Integration systems, like `Jenkins`, access the results of your deployment.
 
-## Installation
+## Installation1
 
 The recommended way to install [Jenkins](http://jenkins-ci.org/) is through [homebrew](http://brew.sh/):
 
@@ -21,7 +21,7 @@ To store the password in the Keychain of your remote machine, I recommend runnin
 
 ## Deploy Strategy
 
-You should **not** deploy a new App Store update after every commit, since you still have to wait 1-2 weeks for the review. Instead I recommend using Git Tags, or custom triggers to deploy a new update.
+You should **not** deploy a new App Store update after every commit, since you still have to wait a few days for the review, and might affect your stars. Instead I recommend using Git Tags, or custom triggers to deploy a new update.
 
 You can set up your own ```Release``` job, which is only triggered manually.
 
