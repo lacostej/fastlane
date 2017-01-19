@@ -29,6 +29,10 @@ require 'spaceship/tunes/recovery_device'
 require 'spaceship/tunes/app_version_promocodes'
 require 'spaceship/tunes/app_version_generated_promocodes'
 
+# Analytics
+require 'spaceship/tunes/analytics/analytics'
+
+
 # File Uploads
 require 'spaceship/du/utilities'
 require 'spaceship/du/upload_file'
