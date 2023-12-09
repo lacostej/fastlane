@@ -483,19 +483,8 @@ module FastlaneCore
       end
     end
 
-    # URI.open added by `require 'open-uri'` is not available in Ruby 2.4. This helper lets you open a URI
-    # by choosing appropriate interface to do so depending on Ruby version. This helper is subject to be removed
-    # when fastlane drops Ruby 2.4 support.
     def self.open_uri(*rest, &block)
-      require 'open-uri'
-
-      if Gem::Version.new(RUBY_VERSION) < Gem::Version.new('2.5')
-        dup = rest.dup
-        uri = dup.shift
-        URI.parse(uri).open(*dup, &block)
-      else
-        URI.open(*rest, &block)
-      end
+      URI.open(*rest, &block)
     end
   end
 end
