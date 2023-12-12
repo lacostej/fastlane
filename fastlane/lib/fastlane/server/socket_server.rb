@@ -158,7 +158,7 @@ module Fastlane
       receive_and_process_commands
     end
 
-    def handle_disconnect(error: false, exit_reason: :error)
+    def handle_disconnect(error: false, exit_reason: :error) # rubocop:disable Lint/UnusedMethodArgument
       Thread.current[:exit_reason] = exit_reason
 
       UI.important("Client disconnected, a pipe broke, or received malformed data") if exit_reason == :error

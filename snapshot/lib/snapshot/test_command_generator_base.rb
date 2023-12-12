@@ -113,7 +113,7 @@ module Snapshot
       def initialize
         not_implemented(__method__)
       end
-
+      # rubocop:disable Lint/UnusedMethodArgument
       def pipe(device_type, language, locale)
         not_implemented(__method__)
       end
@@ -125,6 +125,7 @@ module Snapshot
       def xcodebuild_log_path(device_type: nil, language: nil, locale: nil)
         not_implemented(__method__)
       end
+      # rubocop:enable Lint/UnusedMethodArgument
     end
   end
 end

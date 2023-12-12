@@ -236,7 +236,7 @@ module Fastlane
       FastlaneRequire.install_gem_if_needed(gem_name: gem_name, require_gem: true)
     end
 
-    def generated_fastfile_id(id)
+    def generated_fastfile_id(_id)
       UI.important("The `generated_fastfile_id` action was deprecated, you can remove the line from your `Fastfile`")
     end
 

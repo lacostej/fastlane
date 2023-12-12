@@ -44,7 +44,7 @@ module Produce
       UI.success("Done! Disabled #{disabled} services.")
     end
 
-    def available_services(options, _args)
+    def available_services(_options, _args)
       unless bundle_id
         UI.message("[DevCenter] App '#{Produce.config[:app_identifier]}' does not exist")
         return

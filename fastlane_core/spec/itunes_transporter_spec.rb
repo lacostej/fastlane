@@ -310,7 +310,7 @@ describe FastlaneCore do
       ].compact.join(' ')
     end
 
-    def xcrun_verify_command(transporter: nil, jwt: nil)
+    def xcrun_verify_command(jwt: nil)
       [
         ("ITMS_TRANSPORTER_PASSWORD=#{password.shellescape}" if jwt.nil?),
         "xcrun iTMSTransporter",

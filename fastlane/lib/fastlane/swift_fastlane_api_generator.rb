@@ -142,7 +142,7 @@ module Fastlane
       @fastlane_swift_api_path = File.join(@target_output_path, @target_filename)
     end
 
-    def extend_content(content, tool_details)
+    def extend_content(content, _tool_details)
       return content
     end
 

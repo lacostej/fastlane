@@ -7,7 +7,7 @@ module Screengrab
 
     # android_home        - the String path to the install location of the Android SDK
     # build_tools_version - the String version of the Android build tools that should be used, ignored
-    def initialize(android_home, build_tools_version = nil)
+    def initialize(android_home, _build_tools_version = nil)
       @android_home = android_home
     end
 

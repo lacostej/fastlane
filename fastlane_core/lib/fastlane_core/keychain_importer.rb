@@ -38,7 +38,7 @@ module FastlaneCore
       end
     end
 
-    def self.set_partition_list(path, keychain_path, keychain_password: nil, output: FastlaneCore::Globals.verbose?)
+    def self.set_partition_list(_path, keychain_path, keychain_password: nil, output: FastlaneCore::Globals.verbose?)
       # When security supports partition lists, also add the partition IDs
       # See https://openradar.appspot.com/28524119
       if Helper.backticks('security -h | grep set-key-partition-list', print: false).length > 0

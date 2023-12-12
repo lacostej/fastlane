@@ -255,8 +255,10 @@ end
 # because we use .each
 module LanguageItemHashBehavior
   # this is used to create a hash-like .each method.
-  def each(&block)
-    keys.each { |key| yield(key, get_value(key: key)) }
+  def each
+    keys.each do |key|
+      yield(key, get_value(key: key)) if block_given?
+    end
   end
 end
 

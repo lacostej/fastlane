@@ -82,7 +82,7 @@ module FastlaneCore
     #   failed to parse.
     #
     #   This message will be shown as error
-    def content_error(content, error_line)
+    def content_error(_content, _error_line)
       not_implemented(__method__)
     end
 

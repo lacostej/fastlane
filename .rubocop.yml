@@ -240,11 +240,20 @@ Style/ConditionalAssignment:
 Style/RedundantSelf:
   Enabled: false
 
-# e.g.
-# def self.is_supported?(platform)
-# we may never use `platform`
 Lint/UnusedMethodArgument:
-  Enabled: false
+  Enabled: true
+  Exclude:
+    - 'fastlane/lib/fastlane/actions/**/*'  # def self.is_supported?(platform)
+    - 'fastlane/lib/fastlane/action.rb'
+    - 'fastlane/spec/fixtures/actions/**/*' # we may never use `platform`
+    - 'fastlane/spec/fixtures/*_actions/**/*'
+    - 'fastlane/spec/fixtures/fastfiles/import1/actions/**/*'
+    - 'fastlane/actions/**/*'
+    - 'match/lib/match/**/*' # for now
+    - 'fastlane/lib/fastlane/server/command_executor.rb'
+    - 'fastlane_core/lib/fastlane_core/itunes_transporter.rb'
+    - 'spaceship/lib/spaceship/connect_api/**/*' # generic APIs, not all are called within the repo
+    - 'spaceship/lib/spaceship/tunes/tunes_client.rb'
 
 # the let(:key) { ... }
 Lint/ParenthesesAsGroupedExpression:

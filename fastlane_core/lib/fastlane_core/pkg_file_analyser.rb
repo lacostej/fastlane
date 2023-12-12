@@ -11,7 +11,7 @@ module FastlaneCore
     end
 
     # Fetches the app platform from the given pkg file.
-    def self.fetch_app_platform(path)
+    def self.fetch_app_platform(_path)
       return "osx"
     end
 

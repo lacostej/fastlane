@@ -16,7 +16,7 @@ module Fastlane
     end
 
     # Called once the inspector has received a report with more than one issue.
-    def inspector_successfully_received_report(report, inspector)
+    def inspector_successfully_received_report(report, _inspector)
       report.issues[0..(NUMBER_OF_ISSUES_INLINE - 1)].each { |issue| print_issue_full(issue) }
 
       if report.issues.count > NUMBER_OF_ISSUES_INLINE
@@ -29,7 +29,7 @@ module Fastlane
     end
 
     # Called once the report has been received, but when there are no issues found.
-    def inspector_received_empty_report(report, inspector)
+    def inspector_received_empty_report(_report, inspector)
       puts("Found no similar issues. To create a new issue, please visit:")
       puts("https://github.com/#{inspector.repo_owner}/#{inspector.repo_name}/issues/new")
       puts("Run `fastlane env` to append the fastlane environment to your issue")

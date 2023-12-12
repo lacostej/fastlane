@@ -6,7 +6,7 @@ describe Spaceship::Client do
       "http://example.com"
     end
 
-    def ask_for_2fa_code(text)
+    def ask_for_2fa_code(_text)
       '123'
     end
 
@@ -14,9 +14,11 @@ describe Spaceship::Client do
       opts.first
     end
 
+    # rubocop:disable Lint/UnusedMethodArgument
     def store_cookie(path: nil)
       true
     end
+    # rubocop:enable Lint/UnusedMethodArgument
 
     # these tests actually "send requests" - and `update_request_headers` would otherwise
     # add data to the headers that does not exist / is empty which will crash faraday later

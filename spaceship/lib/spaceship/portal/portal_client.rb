@@ -554,7 +554,7 @@ module Spaceship
       raise UnexpectedResponse.new, "Couldn't register new device, got this: #{parse_response(req)}"
     end
 
-    def disable_device!(device_id, device_udid, mac: false)
+    def disable_device!(device_id, _device_udid, mac: false)
       request(:post, "https://developer.apple.com/services-account/#{PROTOCOL_VERSION}/account/#{platform_slug(mac)}/device/deleteDevice.action", {
         teamId: team_id,
         deviceId: device_id

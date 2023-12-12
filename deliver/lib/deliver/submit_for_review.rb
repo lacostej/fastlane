@@ -29,7 +29,7 @@ module Deliver
 
     private
 
-    def create_review_submission(options, app, version, platform)
+    def create_review_submission(_options, app, version, platform)
       # Can't submit a review if there is already a review in progress
       if app.get_in_progress_review_submission(platform: platform)
         UI.user_error!("Cannot submit for review - A review submission is already in progress")
@@ -90,7 +90,7 @@ module Deliver
       return build
     end
 
-    def update_export_compliance(options, app, build)
+    def update_export_compliance(options, _app, build)
       submission_information = options[:submission_information] || {}
       submission_information = submission_information.transform_keys(&:to_sym)
 
@@ -120,7 +120,7 @@ module Deliver
       end
     end
 
-    def update_idfa(options, app, version)
+    def update_idfa(options, _app, version)
       submission_information = options[:submission_information] || {}
       submission_information = submission_information.transform_keys(&:to_sym)
 

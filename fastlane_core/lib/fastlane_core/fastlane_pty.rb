@@ -26,11 +26,11 @@ module FastlaneCore
       spawn_with_popen(command, &block)
     end
 
-    def self.spawn_with_pty(command, &block)
+    def self.spawn_with_pty(command)
       require 'pty'
       PTY.spawn(command) do |command_stdout, command_stdin, pid|
         begin
-          yield(command_stdout, command_stdin, pid)
+          yield(command_stdout, command_stdin, pid) if block_given?
         rescue Errno::EIO
           # Exception ignored intentionally.
           # https://stackoverflow.com/questions/10238298/ruby-on-linux-pty-goes-away-without-eof-raises-errnoeio
@@ -54,12 +54,12 @@ module FastlaneCore
       raise FastlanePtyError.new(e, status.exitstatus || e.exit_status, status)
     end
 
-    def self.spawn_with_popen(command, &block)
+    def self.spawn_with_popen(command)
       status = nil
       require 'open3'
       Open3.popen2e(command) do |command_stdin, command_stdout, p| # note the inversion
         status = p.value
-        yield(command_stdout, command_stdin, status.pid)
+        yield(command_stdout, command_stdin, status.pid) if block_given?
         command_stdin.close
         command_stdout.close
         raise StandardError, "Process crashed" if status.signaled?

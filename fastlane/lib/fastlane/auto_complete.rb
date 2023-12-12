@@ -6,7 +6,7 @@ module Fastlane
     # This method copies the tab auto completion scripts to the user's home folder,
     # while optionally adding custom commands for which to enable auto complete
     # @param [Array] options An array of all options (e.g. --custom fl)
-    def self.execute(args, options)
+    def self.execute(_args, options)
       shell = ENV['SHELL']
 
       if shell.end_with?("fish")

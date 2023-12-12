@@ -101,7 +101,7 @@ module Precheck
     end
 
     # some rules can be customized with extra data at runtime, see CustomTextRule as an example
-    def customize_with_data(data: nil)
+    def customize_with_data(data: nil) # rubocop:disable Lint/UnusedMethodArgument
       not_implemented(__method__)
     end
 
@@ -124,14 +124,14 @@ module Precheck
       return perform_check(item: item)
     end
 
-    def skip_item_not_meant_for_this_rule(item)
+    def skip_item_not_meant_for_this_rule(_item)
       # item isn't mean for this rule, which is fine, we can just keep passing it along
       return nil
     end
 
     # each rule can define what type of ItemToCheck subclass they support
     # override this method and return true or false
-    def handle_item?(item)
+    def handle_item?(_item)
       not_implemented(__method__)
     end
 

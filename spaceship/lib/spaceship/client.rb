@@ -866,7 +866,7 @@ module Spaceship
       end
     end
 
-    def log_request(method, url, params, headers = nil, &block)
+    def log_request(method, url, params, _headers = nil, &block)
       url ||= extract_key_from_block('url', &block)
       body = extract_key_from_block('body', &block)
       body_to_log = '[undefined body]'
@@ -890,13 +890,13 @@ module Spaceship
       logger.info(">> #{method.upcase} #{url}: #{body_to_log} #{params_to_log.join(', ')}")
     end
 
-    def log_response(method, url, response, headers = nil, &block)
+    def log_response(method, url, response, _headers = nil, &block)
       url ||= extract_key_from_block('url', &block)
       body = response.body.kind_of?(String) ? response.body.force_encoding(Encoding::UTF_8) : response.body
       logger.debug("<< #{method.upcase} #{url}: #{response.status} #{body}")
     end
 
-    def extract_key_from_block(key, &block)
+    def extract_key_from_block(key)
       if block_given?
         obj = Object.new
         class << obj

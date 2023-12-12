@@ -15,7 +15,7 @@ module Fastlane
       @actions_requiring_special_handling = ["sh"].to_set
     end
 
-    def execute(command: nil, target_object: nil)
+    def execute(command: nil, target_object: nil) # rubocop:disable Lint/UnusedMethodArgument
       action_name = command.method_name
       action_class_ref = class_ref_for_action(named: action_name)
       parameter_map = {}
