@@ -126,7 +126,6 @@ module Deliver
 
       # Each app_screenshot_set can have only 10 images
       number_of_screenshots_per_set = {}
-      total_number_of_screenshots = 0
 
       iterator = AppScreenshotIterator.new(localizations)
       iterator.each_local_screenshot(screenshots_per_language) do |localization, app_screenshot_set, screenshot|
@@ -149,8 +148,6 @@ module Deliver
           worker.enqueue(UploadScreenshotJob.new(app_screenshot_set, screenshot.path))
           number_of_screenshots_per_set[app_screenshot_set] += 1
         end
-
-        total_number_of_screenshots += 1
       end
 
       worker.start
@@ -160,7 +157,7 @@ module Deliver
       Helper.show_loading_indicator("Waiting for all the screenshots to finish being processed...")
       states = wait_for_complete(iterator)
       Helper.hide_loading_indicator
-      retry_upload_screenshots_if_needed(iterator, states, total_number_of_screenshots, tries, localizations, screenshots_per_language)
+      retry_upload_screenshots_if_needed(iterator, states, tries, localizations, screenshots_per_language)
 
       UI.message("Successfully uploaded all screenshots")
     end
@@ -183,7 +180,7 @@ module Deliver
     end
 
     # Verify all screenshots states on App Store Connect are okay
-    def retry_upload_screenshots_if_needed(iterator, states, number_of_screenshots, tries, localizations, screenshots_per_language)
+    def retry_upload_screenshots_if_needed(iterator, states, tries, localizations, screenshots_per_language)
       is_failure = states.fetch("FAILED", 0) > 0
       is_missing_screenshot = !screenshots_per_language.empty? && !verify_local_screenshots_are_uploaded(iterator, screenshots_per_language)
       return unless is_failure || is_missing_screenshot
