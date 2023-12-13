@@ -109,7 +109,7 @@ module Snapshot
           end
         }
       ]
-      error_proc = proc do |output, return_code|
+      error_proc = proc do |_output, return_code|
         self.collected_errors.concat(failed_devices.map do |device, messages|
           "#{device}: #{messages.join(', ')}"
         end)
@@ -139,7 +139,7 @@ module Snapshot
                                               error: error_proc)
     end
 
-    def cleanup_after_failure(devices, language, locale, launch_args, return_code)
+    def cleanup_after_failure(devices, language, locale, launch_args, _return_code)
       copy_screenshots(language: language, locale: locale, launch_args: launch_args)
 
       UI.important("Tests failed while running on: #{devices.join(', ')}")
