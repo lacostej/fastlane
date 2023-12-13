@@ -496,7 +496,8 @@ module Pilot
       Spaceship::ConnectAPI.patch_beta_app_review_detail(app_id: build.app.id, attributes: attributes)
     end
 
-    def update_localized_app_review(build, info_by_lang, default_info: nil)
+    # FIXME _build ignored, app used instead
+    def update_localized_app_review(_build, info_by_lang, default_info: nil) # rubocop:disable Lint/UnusedMethodArgument
       info_by_lang = info_by_lang.transform_keys(&:to_sym)
 
       if default_info
@@ -526,7 +527,8 @@ module Pilot
       end
     end
 
-    def update_localized_app_review_for_lang(app, localization, locale, info)
+    # FIXME dangerous potential shadowing
+    def update_localized_app_review_for_lang(app, localization, locale, info) # rubocop:disable Lint/UnusedMethodArgument
       attributes = {}
       attributes[:feedbackEmail] = info[:feedback_email] if info.key?(:feedback_email)
       attributes[:marketingUrl] = info[:marketing_url] if info.key?(:marketing_url)

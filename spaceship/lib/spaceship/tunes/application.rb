@@ -326,7 +326,8 @@ module Spaceship
         return TestFlight::Build.all_processing_builds(app_id: self.apple_id, platform: platform || self.platform)
       end
 
-      def tunes_all_build_trains(app_id: nil, platform: nil)
+      # FIXME bug?
+      def tunes_all_build_trains(app_id: nil, platform: nil) # rubocop:disable Lint/UnusedMethodArgument
         resp = client.all_build_trains(app_id: apple_id, platform: platform)
         trains = resp["trains"] or []
         trains.map do |attrs|

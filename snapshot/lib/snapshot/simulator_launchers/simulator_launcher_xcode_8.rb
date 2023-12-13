@@ -73,7 +73,7 @@ module Snapshot
       return Collector.fetch_screenshots(raw_output, dir_name, device_type, launch_arguments.first)
     end
 
-    def execute(command: nil, language: nil, locale: nil, device_type: nil, launch_args: nil)
+    def execute(command: nil, language: nil, locale: nil, device_type: nil, launch_args: nil) # rubocop:disable Lint/UnusedMethodArgument
       prefix_hash = [
         {
           prefix: "Running Tests: ",

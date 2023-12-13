@@ -11,8 +11,8 @@ module Spaceship::TestFlight
     # It is the responsibility of Build to lazy-load the necessary properties.
     #
     # See `Spaceship::TestFlight::Build#reload`
-
-    def self.all(app_id: nil, platform: nil, retry_count: 3)
+    # FIXME bug?
+    def self.all(app_id: nil, platform: nil, retry_count: 3) # rubocop:disable Lint/UnusedMethodArgument
       filter_platform = Spaceship::ConnectAPI::Platform.map(platform) if platform
       connect_builds = Spaceship::ConnectAPI::Build.all(
         app_id: app_id,

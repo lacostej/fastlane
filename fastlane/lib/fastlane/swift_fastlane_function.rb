@@ -110,14 +110,16 @@ module Fastlane
       end
     end
 
-    def override_default_value_if_not_correct_type(param_name: nil, param_type: nil, default_value: nil)
+    # FIXME
+    def override_default_value_if_not_correct_type(param_name: nil, param_type: nil, default_value: nil) # rubocop:disable Lint/UnusedMethodArgument
       return "[]" if param_type == "[String]" && default_value == ""
       return "nil" if param_type == "((String) -> Void)?"
 
       return default_value
     end
 
-    def get_type(param: nil, default_value: nil, optional: nil, param_type_override: nil, is_string: true)
+    # FIXME false positive
+    def get_type(param: nil, default_value: nil, optional: nil, param_type_override: nil, is_string: true) # rubocop:disable Lint/UnusedMethodArgument
       require 'bigdecimal'
       unless param_type_override.nil?
         type = determine_type_from_override(type_override: param_type_override)
