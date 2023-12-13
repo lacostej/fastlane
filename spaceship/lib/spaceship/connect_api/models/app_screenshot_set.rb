@@ -115,7 +115,7 @@ module Spaceship
       end
 
       def apple_tv?
-        DisplayType::APP_APPLE_TV == screenshot_display_type
+        screenshot_display_type == DisplayType::APP_APPLE_TV
       end
 
       def imessage?
