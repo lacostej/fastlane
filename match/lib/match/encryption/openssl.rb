@@ -31,6 +31,7 @@ module Match
       def encrypt_files(password: nil)
         files = []
         password ||= fetch_password!
+        puts "> password #{password}"
         iterate(self.working_directory) do |current|
           files << current
           encrypt_specific_file(path: current, password: password)
@@ -138,7 +139,9 @@ module Match
       # The encryption parameters in this implementations reflect the old behavior which depended on the users' local OpenSSL version
       # 1.0.x OpenSSL and earlier versions use MD5, 1.1.0c and newer uses SHA256, we try both before giving an error
       def decrypt_specific_file(path: nil, password: nil, hash_algorithm: "MD5")
-        stored_data = Base64.decode64(File.read(path))
+        content = File.read(path)
+        puts content[0..15]
+        stored_data = Base64.decode64(content)
         salt = stored_data[8..15]
         data_to_decrypt = stored_data[16..-1]
 
@@ -148,8 +151,15 @@ module Match
 
         decrypted_data = decipher.update(data_to_decrypt) + decipher.final
 
+        #puts decrypted_data[0..100]
+
+        binding.irb
+
         File.binwrite(path, decrypted_data)
       rescue => error
+        puts error.class
+        puts error.to_s
+        #puts error.backtrace
         fallback_hash_algorithm = "SHA256"
         if hash_algorithm != fallback_hash_algorithm
           decrypt_specific_file(path: path, password: password, hash_algorithm: fallback_hash_algorithm)
