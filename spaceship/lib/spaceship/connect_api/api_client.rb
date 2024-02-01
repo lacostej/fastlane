@@ -233,36 +233,43 @@ module Spaceship
       def handle_error(response)
         body = response.body.empty? ? {} : response.body
 
-        # Setting body nil if invalid JSON which can happen if 502
+        # Sometimes the backend doesn't return a JSON
         begin
           body = JSON.parse(body) if body.kind_of?(String)
         rescue
           nil
         end
 
+        # here either the backend was JSON, and is not a Hash, or it was something else and is still a String
         case response.status.to_i
         when 401
-          raise UnauthorizedAccessError, format_errors(response)
+          raise UnauthorizedAccessError, format_errors(body)
         when 403
+          if body.kind_of?(String)
+            content_type = response.headers['Content-Type']
+            raise UnexpectedResponse, "Invalid JSON response content_type #{content_type}, body: #{body}"
+          end
           error = (body['errors'] || []).first || {}
           error_code = error['code']
           if error_code == "FORBIDDEN.REQUIRED_AGREEMENTS_MISSING_OR_EXPIRED"
-            raise ProgramLicenseAgreementUpdated, format_errors(response)
+            raise ProgramLicenseAgreementUpdated, format_errors(body)
           else
-            raise AccessForbiddenError, format_errors(response)
+            raise AccessForbiddenError, format_errors(body)
           end
         when 502
           # Issue - https://github.com/fastlane/fastlane/issues/19264
           # This 502 with "Could not process this request" body sometimes
           # work and sometimes doesn't
           # Usually retrying once or twice will solve the issue
-          if body && body.include?("Could not process this request")
+          if body.include?("Could not process this request")
             raise BadGatewayError, "Could not process this request"
           end
         end
       end
 
-      def format_errors(response)
+      private
+
+      def format_errors(json_response)
         # Example error format
         # {
         # "errors":[
@@ -334,8 +341,7 @@ module Spaceship
         #   ]
         # }
 
-        body = response.body.empty? ? {} : response.body
-        body = JSON.parse(body) if body.kind_of?(String)
+        body = json_response
 
         formatted_errors = (body['errors'] || []).map do |error|
           messages = [[error['title'], error['detail'], error.dig("source", "pointer")].compact.join(" - ")]
