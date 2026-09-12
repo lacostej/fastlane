@@ -1,0 +1,94 @@
+# Runs the suite many times over on CI, on one commit, to measure how often it
+# goes red there.
+#
+# The point is contention, which is the one thing a developer machine cannot
+# reproduce. A GitHub macOS runner gives 4 workers 3 cores, so a process is
+# descheduled constantly and the window between writing a fixture and reading it
+# stretches. On an idle 14 core machine the same code, with a race deliberately
+# reverted into it, passed 50 runs out of 50.
+#
+# The repetition is the matrix rather than repeated dispatches, because one job
+# is one execution of the suite and jobs are what the runner pool schedules.
+# One platform, not the usual nine: this measures a rate, and mixing platforms
+# would measure an average of different rates instead.
+#
+# Never make this required. It is a measurement and it is expected to go red.
+name: Race hunt
+
+on:
+  workflow_dispatch:
+    inputs:
+      runs:
+        description: "How many times to run the suite. Jobs are capped by the account's concurrent macOS limit, so more than that queues."
+        required: false
+        default: "20"
+      workers:
+        description: "Worker processes per run. 4 is what CI uses."
+        required: false
+        default: "4"
+      os:
+        required: false
+        type: choice
+        options: ["macos-15", "macos-26", "ubuntu-24.04"]
+        default: "macos-15"
+
+# Per dispatch, so re-dispatching to accumulate a bigger sample does not cancel
+# the sample already running.
+concurrency:
+  group: race-hunt-${{ github.run_id }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      runs: ${{ steps.plan.outputs.runs }}
+    steps:
+      - id: plan
+        shell: bash
+        run: echo "runs=$(seq -s, 1 ${{ inputs.runs }} | sed 's/^/[/;s/$/]/')" >> "$GITHUB_OUTPUT"
+
+  run:
+    name: "run ${{ matrix.n }}"
+    needs: plan
+    strategy:
+      # One red job is the data, not a reason to discard the rest of the sample.
+      fail-fast: false
+      matrix:
+        n: ${{ fromJSON(needs.plan.outputs.runs) }}
+    runs-on: ${{ inputs.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: maxim-lobanov/setup-xcode@v1
+        if: startsWith(inputs.os, 'macos')
+        with:
+          xcode-version: '16.4.0'
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4'
+          bundler-cache: true
+      - name: Increase Open File Limit
+        shell: bash
+        run: ulimit -n 65536
+
+      - name: Run the suite once
+        shell: bash
+        env:
+          WORKERS: ${{ inputs.workers }}
+        run: bundle exec rake test_parallel
+
+      # Only on a red run, and it carries the manifests as well as the logs: a
+      # failure that only happens under one split cannot be replayed without
+      # knowing which files the worker was handed.
+      - name: Keep the evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: red-${{ matrix.n }}
+          path: |
+            rspec_worker_*.log
+            rspec_worker_*.units
+          if-no-files-found: warn
