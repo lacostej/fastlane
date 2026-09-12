@@ -5,8 +5,7 @@ describe Fastlane do
   describe Fastlane::FastFile do
     describe "Update App Identifier Integration" do
       # Variables
-      # Not a fixed path under /tmp: parallel rspec processes share it. See fastlane#30184.
-      let(:test_path) { Dir.mktmpdir("fl_spec_update_app_identifier") }
+      let(:test_path) { "/tmp/fastlane/tests/fastlane" }
       let(:fixtures_path) { "./fastlane/spec/fixtures/xcodeproj" }
       let(:proj_file) { "bundle.xcodeproj" }
       let(:identifier_key) { 'PRODUCT_BUNDLE_IDENTIFIER' }
@@ -24,6 +23,8 @@ describe Fastlane do
       end
 
       before do
+        # Create test folder
+        FileUtils.mkdir_p(test_path)
         source = File.join(fixtures_path, proj_file)
         destination = File.join(test_path, proj_file)
 
@@ -57,7 +58,7 @@ describe Fastlane do
           stub_settings_2 = Hash['PRODUCT_BUNDLE_IDENTIFIER', 'com.something.entirely.else']
           stub_settings_2['INFOPLIST_FILE'] = "Other-Info.plist"
 
-          expect(Xcodeproj::Project).to receive(:open).with(xcodeproj).and_return(stub_project)
+          expect(Xcodeproj::Project).to receive(:open).with('/tmp/fastlane/tests/fastlane/bundle.xcodeproj').and_return(stub_project)
           expect(stub_project).to receive(:objects).and_return(stub_object)
           expect(stub_object).to receive(:select).and_return([stub_configuration_1, stub_configuration_2])
           expect(stub_configuration_1).to receive(:build_settings).twice.and_return(stub_settings_1)
@@ -87,7 +88,7 @@ describe Fastlane do
           stub_settings_2 = Hash['PRODUCT_BUNDLE_IDENTIFIER', 'com.something.entirely.else']
           stub_settings_2['INFOPLIST_FILE'] = "Other-Info.plist"
 
-          expect(Xcodeproj::Project).to receive(:open).with(xcodeproj).and_return(stub_project)
+          expect(Xcodeproj::Project).to receive(:open).with('/tmp/fastlane/tests/fastlane/bundle.xcodeproj').and_return(stub_project)
           expect(stub_project).to receive(:objects).and_return(stub_object)
           expect(stub_object).to receive(:select).and_return([stub_configuration_1, stub_configuration_2])
           expect(stub_configuration_1).to receive(:build_settings).twice.and_return(stub_settings_1)
@@ -117,7 +118,7 @@ describe Fastlane do
           stub_settings_2 = Hash['PRODUCT_BUNDLE_IDENTIFIER', 'com.something.entirely.else']
           stub_settings_2['INFOPLIST_FILE'] = "Other-Info.plist"
 
-          expect(Xcodeproj::Project).to receive(:open).with(xcodeproj).and_return(stub_project)
+          expect(Xcodeproj::Project).to receive(:open).with('/tmp/fastlane/tests/fastlane/bundle.xcodeproj').and_return(stub_project)
           expect(stub_project).to receive(:objects).and_return(stub_object)
           expect(stub_object).to receive(:select).and_return([stub_configuration_1, stub_configuration_2])
           expect(stub_configuration_1).to receive(:build_settings).twice.and_return(stub_settings_1)
@@ -147,7 +148,7 @@ describe Fastlane do
           stub_settings_2 = Hash['PRODUCT_BUNDLE_IDENTIFIER', 'com.something.entirely.else']
           stub_settings_2['INFOPLIST_FILE'] = "Other-Info.plist"
 
-          expect(Xcodeproj::Project).to receive(:open).with(xcodeproj).and_return(stub_project)
+          expect(Xcodeproj::Project).to receive(:open).with('/tmp/fastlane/tests/fastlane/bundle.xcodeproj').and_return(stub_project)
           expect(stub_project).to receive(:objects).and_return(stub_object)
           expect(stub_object).to receive(:select).and_return([stub_configuration_1, stub_configuration_2])
           expect(stub_configuration_1).to receive(:build_settings).twice.and_return(stub_settings_1)
@@ -173,7 +174,7 @@ describe Fastlane do
           stub_object = ['object']
           stub_settings = Hash['PRODUCT_BUNDLE_IDENTIFIER', 'com.something.else']
 
-          expect(Xcodeproj::Project).to receive(:open).with(xcodeproj).and_return(stub_project)
+          expect(Xcodeproj::Project).to receive(:open).with('/tmp/fastlane/tests/fastlane/bundle.xcodeproj').and_return(stub_project)
           expect(stub_project).to receive(:objects).and_return(stub_object)
           expect(stub_object).to receive(:select).and_return([stub_configuration])
           expect(stub_configuration).to receive(:build_settings).and_return(stub_settings)
@@ -195,7 +196,7 @@ describe Fastlane do
           stub_configuration = 'stub config'
           stub_object = ['object']
 
-          expect(Xcodeproj::Project).to receive(:open).with(xcodeproj).and_return(stub_project)
+          expect(Xcodeproj::Project).to receive(:open).with('/tmp/fastlane/tests/fastlane/bundle.xcodeproj').and_return(stub_project)
           expect(stub_project).to receive(:objects).and_return(stub_object)
           expect(stub_object).to receive(:select).and_return([])
 
@@ -213,7 +214,8 @@ describe Fastlane do
       end
 
       after do
-        FileUtils.remove_entry(test_path)
+        # Clean up files
+        FileUtils.rm_r(test_path)
       end
     end
   end
