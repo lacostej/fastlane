@@ -1,8 +1,7 @@
 describe Fastlane do
   describe Fastlane::FastFile do
     describe "Update Plist Integration" do
-      # Not a fixed path under /tmp: parallel rspec processes share it. See fastlane#30184.
-      let(:test_path) { Dir.mktmpdir("fl_spec_update_plist") }
+      let(:test_path) { "/tmp/fastlane/tests/fastlane" }
       let(:fixtures_path) { "./fastlane/spec/fixtures/xcodeproj" }
       let(:proj_file) { "bundle.xcodeproj" }
       let(:plist_path) { "Info.plist" }
@@ -11,6 +10,7 @@ describe Fastlane do
 
       before do
         # Set up example info.plist
+        FileUtils.mkdir_p(test_path)
         source = File.join(fixtures_path, proj_file)
         destination = File.join(test_path, proj_file)
 
@@ -50,7 +50,8 @@ describe Fastlane do
       end
 
       after do
-        FileUtils.remove_entry(test_path)
+        # Clean up files
+        File.delete(File.join(test_path, plist_path))
       end
     end
   end
