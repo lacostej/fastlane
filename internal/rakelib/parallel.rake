@@ -383,8 +383,18 @@ end
 # same worker, however many times it runs. SOAK_WORKERS varies the worker count
 # between runs, which repacks, so the sample covers assignments rather than one.
 #
+# Cold start. Every CI job gets a clean machine; a soak in one working copy has
+# whatever the previous run left, so it measures steady state and cannot see the
+# class that only fails on a fresh machine. SOAK_ISOLATE mints a HOME and a
+# TMPDIR per run and clears the literal /tmp paths the suite writes, which is
+# what a CI job actually looks like. One pair per run, shared by that run's
+# workers, because a CI job is one machine with several workers on it: a HOME
+# per worker would be more isolated than CI and would hide the very races it is
+# meant to expose.
+#
 #   rake test_soak                          20 runs at the default worker count
 #   RUNS=50 rake test_soak
+#   RUNS=50 SOAK_ISOLATE=1 rake test_soak   a clean machine for every run
 #   RUNS=100 SOAK_WORKERS="2 4 6 8" rake test_soak   repack between runs
 #   RUNS=50 WORKERS=24 rake test_soak       oversubscribed, to widen the windows
 #   RUNS=50 WORKERS=1  rake test_soak       the control arm: no split, no class
@@ -392,6 +402,22 @@ end
 # Run it at the CI worker count and again at 1. A red rate at 4 and a clean
 # sweep at 1 attributes the failures to the split rather than to the suite.
 # See fastlane#30184.
+# What the suite writes outside TMPDIR, measured by running it and listing the
+# temp root afterwards rather than by grepping for "/tmp", which over-reports
+# badly: most matches are mocked or only ever appear inside a command string.
+# On macOS /tmp is a symlink to private/tmp and find(1) does not follow it, so
+# the obvious check silently returns nothing.
+SOAK_LITERAL_TMP_PATHS = [
+  "/tmp/fastlane",
+  "/tmp/trainer_results",
+  "/tmp/before_all.txt",
+  "/tmp/after_all.txt",
+  "/tmp/error.txt",
+  "/tmp/deliver_result.txt",
+  "/tmp/documentation.md",
+  "/tmp/fastlane_callback.txt"
+].freeze
+
 desc("Run the split repeatedly and report how often it goes red")
 task(:test_soak) do
   require "fileutils"
@@ -401,6 +427,7 @@ task(:test_soak) do
   # Cycled per run so the packing differs between them. Empty means leave
   # WORKERS alone and test one assignment repeatedly, which is weaker.
   cycle = ENV["SOAK_WORKERS"].to_s.split
+  isolate = !ENV["SOAK_ISOLATE"].to_s.empty?
   FileUtils.mkdir_p(dir)
 
   started = Time.now
@@ -415,7 +442,18 @@ task(:test_soak) do
     # The rest of the environment is inherited, so a run is whatever the caller
     # configured rather than a second set of defaults.
     env = workers ? { "WORKERS" => workers.to_s } : {}
+
+    if isolate
+      home, tmp, isolation = throwaway_home_and_tmpdir("soak", announce: false)
+      env = env.merge(isolation)
+      # TMPDIR does not cover these. They are literal absolute paths, so
+      # redirecting Dir.tmpdir leaves them exactly where they were and the
+      # previous run's copies survive into this one. See fastlane#30184.
+      SOAK_LITERAL_TMP_PATHS.each { |path| FileUtils.rm_rf(path) }
+    end
+
     ok = system(env, "bundle exec rake test_parallel", out: log, err: [log, "a"])
+    [home, tmp].each { |root| FileUtils.remove_entry(root) if root && File.directory?(root) } if isolate
 
     if ok
       puts(format("  run %<run>3d/%<runs>d  w=%<workers>-3s pass", run: run, runs: runs, workers: label))
@@ -446,6 +484,7 @@ task(:test_soak) do
   puts(format("%<red>d of %<runs>d runs red (%<rate>.1f%%) at WORKERS=%<workers>s in %<elapsed>.0fs",
               red: red.size, runs: runs, rate: 100.0 * red.size / runs,
               workers: cycle.empty? ? (ENV["WORKERS"] || "default") : cycle.join("/"), elapsed: elapsed))
+  puts("Each run had a throwaway HOME and TMPDIR and a cleared /tmp.") if isolate
 
   if red.empty?
     # Said explicitly because a clean sweep reads as proof and is not one.
