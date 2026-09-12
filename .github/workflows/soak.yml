@@ -1,0 +1,186 @@
+# Runs the suite many times over, varying only the seed, to measure how much
+# order dependence is left rather than to gate anything.
+#
+# This is not CI. CI asks "did this change break something" and runs once. This
+# asks "how flaky is this suite, and where", runs the same commit dozens of
+# times, and never blocks a merge. Nothing here should ever be made required.
+#
+# What it is good for: a seed that fails is immediately reproducible, so the
+# output is a list of seeds to hand to someone rather than an unexplained red.
+#
+# What it cannot find, and it is worth being honest about: a split only failure
+# needs a worker to see a subset, a clean machine failure needs a clean machine,
+# and a race needs concurrency. None of those are orderings. Roughly, 100 runs
+# still miss a one-in-a-hundred defect about a third of the time, so a clean
+# soak is weak evidence of absence. See fastlane#30184.
+name: Soak
+
+on:
+  workflow_dispatch:
+    inputs:
+      runs:
+        description: "Total runs of the suite."
+        required: false
+        default: "50"
+      shards:
+        description: "How many to run in parallel. Total runs are divided between them."
+        required: false
+        default: "10"
+      base_seed:
+        description: "Seeds are base_seed + run index, so a whole soak is repeatable. 0 picks one at random."
+        required: false
+        default: "0"
+      guards:
+        description: "The env and singleton guards. 'off' measures what they are masking rather than fixing."
+        required: false
+        type: choice
+        options: ["on", "off"]
+        default: "on"
+      platform:
+        required: false
+        type: choice
+        options: ["macos", "ubuntu"]
+        default: "ubuntu"
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    name: "Plan"
+    runs-on: ubuntu-latest
+    outputs:
+      shards: ${{ steps.plan.outputs.shards }}
+      per_shard: ${{ steps.plan.outputs.per_shard }}
+      base_seed: ${{ steps.plan.outputs.base_seed }}
+    steps:
+      - id: plan
+        shell: bash
+        run: |
+          runs=${{ inputs.runs }}
+          shards=${{ inputs.shards }}
+          per_shard=$(( (runs + shards - 1) / shards ))
+          base=${{ inputs.base_seed }}
+          if [ "$base" = "0" ]; then base=$(( RANDOM * 32768 + RANDOM )); fi
+          echo "shards=$(seq -s, 1 "$shards" | sed 's/^/[/;s/$/]/')" >> "$GITHUB_OUTPUT"
+          echo "per_shard=$per_shard" >> "$GITHUB_OUTPUT"
+          echo "base_seed=$base" >> "$GITHUB_OUTPUT"
+          echo "### Soak plan" >> "$GITHUB_STEP_SUMMARY"
+          echo "$runs runs over $shards shards, $per_shard each, from base seed $base, guards ${{ inputs.guards }}." >> "$GITHUB_STEP_SUMMARY"
+
+  soak:
+    name: "Soak ${{ matrix.shard }}"
+    needs: plan
+    # Never stop early. One shard failing is the data, not a reason to discard
+    # the rest of the sample.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs.plan.outputs.shards) }}
+    runs-on: ${{ inputs.platform == 'macos' && 'macos-15' || 'ubuntu-24.04' }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: maxim-lobanov/setup-xcode@v1
+        if: inputs.platform == 'macos'
+        with:
+          xcode-version: '16.4.0'
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ inputs.platform == 'macos' && '3.4' || '3.1' }}
+          bundler-cache: true
+
+      - name: Increase Open File Limit
+        shell: bash
+        run: ulimit -n 65536
+
+      - name: Run the suite repeatedly
+        shell: bash
+        env:
+          # 'off' measures what the guards mask. Unset rather than "on", so the
+          # default path is exactly what a normal run does.
+          FASTLANE_SPEC_ENV_GUARD: ${{ inputs.guards == 'off' && 'off' || '' }}
+          FASTLANE_SPEC_SINGLETON_GUARD: ${{ inputs.guards == 'off' && 'off' || '' }}
+        run: |
+          results="results-${{ matrix.shard }}.tsv"
+          : > "$results"
+          for i in $(seq 1 ${{ needs.plan.outputs.per_shard }}); do
+            seed=$(( ${{ needs.plan.outputs.base_seed }} + (${{ matrix.shard }} - 1) * 1000 + i ))
+            echo "::group::seed $seed"
+            # The suite failing is the thing being measured, so do not let it
+            # end the loop. The exit status is recorded instead.
+            set +e
+            bundle exec rspec --order "random:$seed" --format progress > "run-$seed.log" 2>&1
+            status=$?
+            set -e
+            if [ "$status" -eq 0 ]; then
+              printf '%s\tpass\t\n' "$seed" >> "$results"
+              echo "seed $seed: pass"
+            else
+              # Record which examples failed, so the summary says what broke and
+              # not merely that something did.
+              failed=$(grep -oE '^rspec \./[^ ]+' "run-$seed.log" | sed 's/^rspec //' | sort -u | paste -sd' ' -)
+              printf '%s\tFAIL\t%s\n' "$seed" "$failed" >> "$results"
+              echo "seed $seed: FAIL  $failed"
+            fi
+            echo "::endgroup::"
+          done
+          cat "$results"
+
+      - name: Keep the results and the logs of failing runs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: soak-${{ matrix.shard }}
+          path: |
+            results-*.tsv
+            run-*.log
+          if-no-files-found: warn
+
+  summarise:
+    name: "Summary"
+    needs: [plan, soak]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: soak-*
+          merge-multiple: true
+      - shell: bash
+        run: |
+          cat results-*.tsv > all.tsv 2>/dev/null || { echo "no results"; exit 1; }
+          total=$(wc -l < all.tsv | tr -d ' ')
+          failed=$(grep -c 'FAIL' all.tsv || true)
+          {
+            echo "## Soak result"
+            echo
+            echo "| | |"
+            echo "| --- | --- |"
+            echo "| Runs | $total |"
+            echo "| Failed | $failed |"
+            echo "| Rate | $(awk -v f="$failed" -v t="$total" 'BEGIN{ if (t>0) printf "%.1f%%", (f/t)*100; else print "n/a" }') |"
+            echo "| Guards | ${{ inputs.guards }} |"
+            echo "| Base seed | ${{ needs.plan.outputs.base_seed }} |"
+            echo
+            if [ "$failed" -gt 0 ]; then
+              echo "### Failing seeds"
+              echo
+              echo "Reproduce one with \`RSPEC_ARGS=\"--seed <seed>\" bundle exec rake test_all\`."
+              echo
+              echo "| Seed | Examples |"
+              echo "| --- | --- |"
+              grep 'FAIL' all.tsv | while IFS=$'\t' read -r seed _ examples; do
+                echo "| \`$seed\` | ${examples:-unknown} |"
+              done
+              echo
+              echo "### How often each example failed"
+              echo
+              echo "An example failing in many orderings is a common dependency; one failing in a single ordering is a rare one, and rarer is worse."
+              echo
+              echo '```'
+              grep 'FAIL' all.tsv | cut -f3 | tr ' ' '\n' | grep -v '^$' | sort | uniq -c | sort -rn
+              echo '```'
+            else
+              echo "No failures. With $total runs this says little about defects rarer than roughly 1 in $total; it is not evidence of absence."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
