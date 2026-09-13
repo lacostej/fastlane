@@ -353,3 +353,114 @@ task(:test_tune) do
               workers: best[0], wall: best[1][:wall]))
   puts("A large spread means the split is uneven on this machine: try REFRESH=1 to record its own timings.") if best[1][:spread] > 25
 end
+
+# Runs the split over and over on one commit and reports how often it goes red.
+#
+# A different question from the Soak workflow, which varies the rspec seed in a
+# single process. What the split produces are not orderings: the same code
+# passed 40 of 40 sequential random seeds and failed 3 of 15 under two
+# concurrent processes. Only concurrency reproduces them, so only repeating the
+# concurrent run measures them.
+#
+# Worth running locally as well as on CI, and arguably more so. A GitHub macOS
+# runner has three cores; a developer machine has more, so more of the workers
+# genuinely overlap and the windows between a check and its use are wider.
+# WORKERS is not capped, and deliberately oversubscribing is useful here: it
+# costs wall clock, which a measurement does not care about, and buys more
+# preemption, which is what turns a narrow race into a reproducible one.
+#
+# Two things decide whether this finds anything, and neither is obvious.
+#
+# Sample size. Each spec file runs once per run, so a race between two of them
+# needs their two short windows to coincide, and the per run probability is
+# small. Eight runs cannot tell 0% from 10%: a true rate of 10% shows nothing at
+# all 43% of the time. Fifty runs misses a 5% rate 8% of the time, a hundred
+# misses it 1% of the time. Anything under about fifty is not a measurement.
+#
+# Which files share a process. The split is deterministic: the same timings file
+# gives the same buckets every run, so repeating it re-tests one assignment. Two
+# spec files that race are simply never caught if the packing puts them on the
+# same worker, however many times it runs. SOAK_WORKERS varies the worker count
+# between runs, which repacks, so the sample covers assignments rather than one.
+#
+#   rake test_soak                          20 runs at the default worker count
+#   RUNS=50 rake test_soak
+#   RUNS=100 SOAK_WORKERS="2 4 6 8" rake test_soak   repack between runs
+#   RUNS=50 WORKERS=24 rake test_soak       oversubscribed, to widen the windows
+#   RUNS=50 WORKERS=1  rake test_soak       the control arm: no split, no class
+#
+# Run it at the CI worker count and again at 1. A red rate at 4 and a clean
+# sweep at 1 attributes the failures to the split rather than to the suite.
+# See fastlane#30184.
+desc("Run the split repeatedly and report how often it goes red")
+task(:test_soak) do
+  require "fileutils"
+
+  runs = Integer(ENV["RUNS"] || 20)
+  dir = ENV["SOAK_DIR"] || "soak_results"
+  # Cycled per run so the packing differs between them. Empty means leave
+  # WORKERS alone and test one assignment repeatedly, which is weaker.
+  cycle = ENV["SOAK_WORKERS"].to_s.split
+  FileUtils.mkdir_p(dir)
+
+  started = Time.now
+  red = []
+  examples = Hash.new(0)
+
+  runs.times do |index|
+    run = index + 1
+    log = File.join(dir, "run-#{run}.log")
+    workers = cycle.empty? ? ENV["WORKERS"] : cycle[index % cycle.size]
+    label = workers || "default"
+    # The rest of the environment is inherited, so a run is whatever the caller
+    # configured rather than a second set of defaults.
+    env = workers ? { "WORKERS" => workers.to_s } : {}
+    ok = system(env, "bundle exec rake test_parallel", out: log, err: [log, "a"])
+
+    if ok
+      puts(format("  run %<run>3d/%<runs>d  w=%<workers>-3s pass", run: run, runs: runs, workers: label))
+      next
+    end
+
+    # From the worker logs, not the task's own output: the task indents the
+    # lines it echoes and the worker log holds them as rspec wrote them, which
+    # is the form that can be pasted back into a command.
+    failed = Dir.glob("rspec_worker_*.log")
+                .flat_map { |path| File.readlines(path).grep(%r{^rspec \./}) }
+                .map { |line| line.split.fetch(1, "") }.reject(&:empty?).uniq
+    failed.each { |id| examples[id] += 1 }
+    red << [run, failed]
+
+    # A split only failure cannot be replayed without knowing which files the
+    # worker was handed, so the manifests are kept alongside the logs.
+    keep = File.join(dir, "fail-#{run}")
+    FileUtils.mkdir_p(keep)
+    Dir.glob("rspec_worker_*.{log,units}").each { |path| FileUtils.cp(path, keep) }
+
+    puts(format("  run %<run>3d/%<runs>d  w=%<workers>-3s RED   %<what>s",
+                run: run, runs: runs, workers: label, what: failed.join(" ")))
+  end
+
+  elapsed = Time.now - started
+  puts("")
+  puts(format("%<red>d of %<runs>d runs red (%<rate>.1f%%) at WORKERS=%<workers>s in %<elapsed>.0fs",
+              red: red.size, runs: runs, rate: 100.0 * red.size / runs,
+              workers: cycle.empty? ? (ENV["WORKERS"] || "default") : cycle.join("/"), elapsed: elapsed))
+
+  if red.empty?
+    # Said explicitly because a clean sweep reads as proof and is not one.
+    puts("No red runs. At #{runs} runs this says little about anything rarer than roughly 1 in #{runs}.")
+  else
+    puts("")
+    puts("How often each example failed:")
+    examples.sort_by { |_id, count| -count }.each { |id, count| puts(format("  %<count>3d  %<id>s", count: count, id: id)) }
+    puts("")
+    puts("Replay one with: rspec $(cat #{dir}/fail-<run>/rspec_worker_<n>.units)")
+  end
+
+  File.write(File.join(dir, "results.tsv"),
+             (1..runs).map { |run|
+               entry = red.find { |number, _| number == run }
+               entry ? "#{run}\tFAIL\t#{entry[1].join(' ')}\n" : "#{run}\tpass\t\n"
+             }.join)
+end

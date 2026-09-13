@@ -1,0 +1,147 @@
+# Measures how often a CI run goes red, by running exactly what CI runs, many
+# times, on one commit.
+#
+# This is a different question from the Soak workflow, which varies the rspec
+# seed in a single process and measures order dependence. The failures the split
+# produces are not orderings: the same code passed 40 of 40 sequential random
+# seeds and failed 3 of 15 under two concurrent processes. Only concurrency
+# reproduces them, so only repeating the concurrent run measures them.
+#
+# Nothing here gates anything. It is a measurement, and it should never be made
+# required.
+#
+# Run it twice to get a comparison worth having: once at the CI worker count,
+# once at workers=1. A red rate at 4 and a clean sweep at 1 attributes the
+# failures to the split rather than to the suite. See fastlane#30184.
+name: Soak the split
+
+on:
+  workflow_dispatch:
+    inputs:
+      runs:
+        description: "Total runs of the suite."
+        required: false
+        default: "50"
+      shards:
+        description: "Runners used. Runs are divided between them. GitHub caps concurrent macOS jobs per account, so more than that queues rather than parallelises."
+        required: false
+        default: "5"
+      workers:
+        description: "Worker processes per run. 4 is what CI uses; 1 disables the split and is the control arm."
+        required: false
+        default: "4"
+      repack:
+        description: "Space separated worker counts to cycle between runs, e.g. '2 4 6 8'. The split is deterministic, so without this every run tests the same assignment of files to workers. Overrides the field above."
+        required: false
+        default: ""
+      platform:
+        required: false
+        type: choice
+        options: ["macos", "ubuntu"]
+        default: "macos"
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    name: "Plan"
+    runs-on: ubuntu-latest
+    outputs:
+      shards: ${{ steps.plan.outputs.shards }}
+      per_shard: ${{ steps.plan.outputs.per_shard }}
+    steps:
+      - id: plan
+        shell: bash
+        run: |
+          runs=${{ inputs.runs }}
+          shards=${{ inputs.shards }}
+          per_shard=$(( (runs + shards - 1) / shards ))
+          echo "shards=$(seq -s, 1 "$shards" | sed 's/^/[/;s/$/]/')" >> "$GITHUB_OUTPUT"
+          echo "per_shard=$per_shard" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Plan"
+            echo "$runs runs over $shards shards, $per_shard each, at WORKERS=${{ inputs.workers }} on ${{ inputs.platform }}."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  soak:
+    name: "Soak ${{ matrix.shard }}"
+    needs: plan
+    # One shard going red is the data, not a reason to throw away the sample.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs.plan.outputs.shards) }}
+    runs-on: ${{ inputs.platform == 'macos' && 'macos-15' || 'ubuntu-24.04' }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: maxim-lobanov/setup-xcode@v1
+        if: inputs.platform == 'macos'
+        with:
+          xcode-version: '16.4.0'
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ inputs.platform == 'macos' && '3.4' || '3.1' }}
+          bundler-cache: true
+
+      - name: Increase Open File Limit
+        shell: bash
+        run: ulimit -n 65536
+
+      - name: Run the split repeatedly
+        shell: bash
+        env:
+          WORKERS: ${{ inputs.workers }}
+          SOAK_WORKERS: ${{ inputs.repack }}
+          RUNS: ${{ needs.plan.outputs.per_shard }}
+          SOAK_DIR: soak-${{ matrix.shard }}
+        run: bundle exec rake test_soak
+
+      - name: Keep the results and the evidence from failing runs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: soak-split-${{ matrix.shard }}
+          path: soak-${{ matrix.shard }}/**
+          if-no-files-found: warn
+
+  summarise:
+    name: "Summary"
+    needs: [plan, soak]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: soak-split-*
+          merge-multiple: true
+      - shell: bash
+        run: |
+          cat soak-*/results.tsv > all.tsv 2>/dev/null || { echo "no results"; exit 1; }
+          total=$(wc -l < all.tsv | tr -d ' ')
+          failed=$(grep -c 'FAIL' all.tsv || true)
+          {
+            echo "## Soak the split"
+            echo
+            echo "| | |"
+            echo "| --- | --- |"
+            echo "| Runs | $total |"
+            echo "| Red | $failed |"
+            echo "| Rate | $(awk -v f="$failed" -v t="$total" 'BEGIN{ if (t>0) printf "%.1f%%", (f/t)*100; else print "n/a" }') |"
+            echo "| Workers | ${{ inputs.repack != '' && inputs.repack || inputs.workers }} |"
+            echo "| Platform | ${{ inputs.platform }} |"
+            echo
+            if [ "$failed" -gt 0 ]; then
+              echo "### How often each example failed"
+              echo
+              echo "An example that fails across many runs is a frequent race; one that fails once is a rare one, and rare is harder to catch than to fix."
+              echo
+              echo '```'
+              grep 'FAIL' all.tsv | cut -f3 | tr ' ' '\n' | grep -v '^$' | sort | uniq -c | sort -rn
+              echo '```'
+              echo
+              echo "Worker logs and the file manifests for each red run are in the artifacts, so a failure can be replayed with \`rspec \$(cat fail-<run>/rspec_worker_<n>.units)\`."
+            else
+              echo "No red runs. At $total runs this says little about anything rarer than roughly 1 in $total, and is not evidence of absence."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
