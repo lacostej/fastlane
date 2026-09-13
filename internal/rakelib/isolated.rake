@@ -18,13 +18,19 @@
 #   rake test_isolated                 the whole suite
 #   rake test_isolated[spaceship/spec] a subset
 desc("Run the suite with HOME and TMPDIR pointed at throwaway directories")
-task(:test_isolated, [:pattern]) do |_task, args|
+# Mints a throwaway HOME and TMPDIR and returns them with the env that points a
+# child process at both. Shared with test_soak, which needs a fresh pair per run
+# to imitate a CI job: every job gets a clean machine, and a soak that reuses one
+# machine measures steady state rather than the cold start CI always sees.
+#
+# `announce` is off for the soak, where a line per run is noise.
+def throwaway_home_and_tmpdir(label, announce: true)
   require "tmpdir"
   require "fileutils"
 
-  home = Dir.mktmpdir("fastlane-isolated-home")
+  home = Dir.mktmpdir("fastlane-#{label}-home")
   # Made before TMPDIR is redirected, so both live somewhere real.
-  tmp = Dir.mktmpdir("fastlane-isolated-tmp")
+  tmp = Dir.mktmpdir("fastlane-#{label}-tmp")
   env = { "HOME" => home, "TMPDIR" => tmp }
 
   # A keychain has to be seeded, because `security cms -D`, which fastlane uses
@@ -49,13 +55,21 @@ task(:test_isolated, [:pattern]) do |_task, args|
     # rather than reporting anything. Headless there is nobody to click it.
     seeded = File.join(home, "Library", "Keychains", "#{keychain}-db")
     unless File.exist?(seeded)
-      FileUtils.remove_entry(home)
+      [home, tmp].each { |root| FileUtils.remove_entry(root) }
       abort("could not seed a keychain at #{seeded}, refusing to run: the suite would block on a keychain prompt")
     end
-    puts("HOME is #{home}, keychain seeded")
-  else
+    puts("HOME is #{home}, keychain seeded") if announce
+  elsif announce
     puts("HOME is #{home}")
   end
+
+  [home, tmp, env]
+end
+
+task(:test_isolated, [:pattern]) do |_task, args|
+  require "fileutils"
+
+  home, tmp, env = throwaway_home_and_tmpdir("isolated")
 
   command = args[:pattern] ? "rspec #{args[:pattern]} --format progress" : "rake test_all"
   ok = system(env, "bundle exec #{command}")
