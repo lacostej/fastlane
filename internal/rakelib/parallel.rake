@@ -534,11 +534,22 @@ task(:test_race) do
   abort("RACE_FILES is required: two or more spec files that share a resource") if files.size < 2
 
   rounds = Integer(ENV["ROUNDS"] || 15)
+  # Copies of each file running at once. Two processes only collide when A's
+  # window overlaps B's; more copies raise the chance of some pair overlapping
+  # far faster than more rounds do, and cost nothing in wall clock until the
+  # machine runs out of cores.
+  procs = Integer(ENV["RACE_PROCS"] || 1)
   dir = ENV["RACE_DIR"] || "race_results"
   FileUtils.mkdir_p(dir)
 
-  puts("#{files.size} file(s), #{rounds} round(s) each, all at once:")
-  files.each { |file| puts("  #{file}") }
+  # An entry may name a single example (`path:line`), which rspec accepts and
+  # which is usually what you want: it strips out the examples that do not touch
+  # the shared resource, so the round is mostly the part that can collide rather
+  # than a hundred that cannot.
+  files = files.flat_map { |file| Array.new(procs) { file } }
+
+  puts("#{files.size} process(es), #{rounds} round(s) each, all at once:")
+  files.uniq.each { |file| puts("  #{file}#{procs > 1 ? " x#{procs}" : ''}") }
 
   started = Time.now
   mutex = Mutex.new
