@@ -130,8 +130,9 @@ describe Spaceship::Client do
       allow(client).to receive(:request).and_return(response_double(404, "<html>nope</html>"))
 
       # AppleTimeoutError is in with_retry's list, so raising it for a 404 costs
-      # five attempts and three second sleeps before failing anyway.
-      expect { client.itc_service_key }.to_not(raise_error(Spaceship::AppleTimeoutError))
+      # five attempts and three second sleeps before failing anyway. Asserting the
+      # class that is raised also rules out the one that must not be.
+      expect { client.itc_service_key }.to raise_error(Spaceship::UnexpectedResponse)
     end
 
     it "keeps a server error retryable" do
