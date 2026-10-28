@@ -1,6 +1,6 @@
 #!/bin/bash
 # Probe for scan's simulator pre-boot (fastlane#30498): can simctl boot non-iOS simulators,
-# and does xcodebuild shut down a tvOS simulator it booted itself?
+# and does xcodebuild shut down a simulator it booted itself, on every platform?
 set -u
 OUT="${RUNNER_TEMP:-/tmp}/sim-probe"
 mkdir -p "$OUT"
@@ -43,22 +43,38 @@ for platform in tvOS watchOS xrOS iOS; do
   echo "shutdown exit=$? state=$(state $udid)"
 done
 
-read -r udid runtime name <<< "$(first_device tvOS)"
-if [ -n "${udid:-}" ]; then
-  echo "== xcodebuild test on a shut-down tvOS simulator: $name $runtime"
+# Minimal Swift package with one XCTest, so the test run does not depend on an example project
+PKG="$OUT/Probe"
+mkdir -p "$PKG/Sources/Probe" "$PKG/Tests/ProbeTests"
+cat > "$PKG/Package.swift" <<'SWIFT'
+// swift-tools-version:5.9
+import PackageDescription
+let package = Package(name: "Probe", targets: [.target(name: "Probe"), .testTarget(name: "ProbeTests", dependencies: ["Probe"])])
+SWIFT
+echo 'public func probe() -> Int { 1 }' > "$PKG/Sources/Probe/Probe.swift"
+printf 'import XCTest\nimport Probe\nfinal class ProbeTests: XCTestCase { func testProbe() { XCTAssertEqual(probe(), 1) } }\n' > "$PKG/Tests/ProbeTests/ProbeTests.swift"
+
+# Xcode names the package scheme itself ("Probe-Package" on Xcode 27)
+scheme=$(cd "$PKG" && xcodebuild -list 2>/dev/null | awk '/Schemes:/ { f = 1; next } f && NF { print $1; exit }')
+echo "package scheme: $scheme"
+
+for platform in tvOS watchOS xrOS iOS; do
+  read -r udid runtime name <<< "$(first_device $platform)"
+  [ -z "${udid:-}" ] && continue
+  echo "== xcodebuild test on a shut-down $platform simulator: $name $runtime"
   echo "state before: $(state $udid)"
-  ( while true; do state "$udid"; sleep 1; done ) > "$OUT/states-tvos.log" 2>&1 &
+  ( while true; do state "$udid"; sleep 1; done ) > "$OUT/states-$platform.log" 2>&1 &
   watcher=$!
-  xcodebuild test -project snapshot/example/Example.xcodeproj -scheme ExampleTVUITests \
-    -destination "id=$udid" -derivedDataPath "$OUT/dd" TVOS_DEPLOYMENT_TARGET=15.0 > "$OUT/xcodebuild-tvos.log" 2>&1
+  (cd "$PKG" && xcodebuild test -scheme "$scheme" -destination "id=$udid" -derivedDataPath "$OUT/dd-$platform") > "$OUT/xcodebuild-$platform.log" 2>&1
   echo "xcodebuild exit=$?"
-  kill $watcher
-  grep -E "Executed|TEST (SUCCEEDED|FAILED)" "$OUT/xcodebuild-tvos.log" | tail -2
-  grep -A3 "Testing failed" "$OUT/xcodebuild-tvos.log"
+  kill $watcher; wait $watcher 2>/dev/null
+  grep -E "Executed|TEST (SUCCEEDED|FAILED)" "$OUT/xcodebuild-$platform.log" | tail -2
+  grep -A3 "Testing failed" "$OUT/xcodebuild-$platform.log"
   echo "states seen during the run:"
-  uniq -c "$OUT/states-tvos.log"
+  uniq -c "$OUT/states-$platform.log"
   echo "state after: $(state $udid)"
-  xcrun simctl spawn "$udid" log collect --output "$OUT/tvos-after.logarchive" > "$OUT/collect-tvos-after.log" 2>&1
+  xcrun simctl spawn "$udid" log collect --output "$OUT/$platform-after.logarchive" > "$OUT/collect-$platform-after.log" 2>&1
   echo "log collect (after xcodebuild) exit=$?"
-  head -2 "$OUT/collect-tvos-after.log"
-fi
+  head -2 "$OUT/collect-$platform-after.log"
+  xcrun simctl shutdown "$udid" 2>/dev/null
+done
