@@ -30,6 +30,15 @@ describe FastlaneCore do
         expect(result).to eq('foo')
       end
 
+      it 'keeps a last line that has no newline', unless: FastlaneCore::Helper.windows? do
+        # Linux ends the read with Errno::EIO, and IO#each drops the line it had not finished. See fastlane#21792.
+        result = FastlaneSpec::Env.with_env_values('FASTLANE_EXEC_FLUSH_PTY_WORKAROUND' => '1') do
+          FastlaneCore::CommandExecutor.execute(command: 'printf foo', print_command: false)
+        end
+
+        expect(result).to eq('foo')
+      end
+
       it 'reads output as UTF-8 whatever the default encoding, and restores it', unless: FastlaneCore::Helper.windows? do
         allow(FastlaneCore::UI).to receive(:command)
         allow(FastlaneCore::UI).to receive(:command_output)
