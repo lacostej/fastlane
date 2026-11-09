@@ -66,11 +66,11 @@ describe FastlaneCore do
       end
 
       it 'handles reading which throws a EIO exception', requires_pty: true do
-        fake_std_in_lines = [
+        fake_std_in_reads = [
           "a_filename\n"
         ]
         fake_std_in = double("stdin")
-        expect(fake_std_in).to receive(:each).and_yield(*fake_std_in_lines).and_raise(Errno::EIO)
+        expect(fake_std_in).to receive(:readpartial).twice { fake_std_in_reads.shift || raise(Errno::EIO) }
 
         fake_std_out = double("stdout")
 
@@ -98,12 +98,12 @@ describe FastlaneCore do
       end
 
       it 'chomps but does not strip output lines', requires_pty: true do
-        fake_std_in = [
+        fake_std_in = StringIO.new([
           "Shopping list:\n",
           "  - Milk\n",
           "\r  - Bread\n",
           "  - Muffins\n"
-        ]
+        ].join)
 
         fake_std_out = 'not_really_std_out'
 
@@ -257,7 +257,7 @@ Shopping list:
         expect(FastlaneCore::FastlanePty).to receive(:spawn) do |command, &block|
           expect(command).to eq("failing command")
 
-          block.yield(["log\n"], nil, nil)
+          block.yield(StringIO.new("log\n"), nil, nil)
           42
         end
 

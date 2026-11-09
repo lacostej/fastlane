@@ -54,7 +54,7 @@ module FastlaneCore
 
         begin
           status = FastlaneCore::FastlanePty.spawn(command) do |command_stdout, command_stdin, pid|
-            command_stdout.each do |l|
+            each_line_of(command_stdout) do |l|
               line = l.chomp
               line = line[1..-1] if line[0] == "\r"
               output << line
@@ -105,6 +105,25 @@ module FastlaneCore
       ensure
         Encoding.default_external = previous_encoding.first
         Encoding.default_internal = previous_encoding.last
+      end
+
+      private
+
+      # Each line of io, as IO#each gives them, and the last one also when it has no newline: a Linux PTY read ends
+      # with Errno::EIO, and IO#each drops the line it had not finished (fastlane#21792)
+      def each_line_of(io)
+        buffer = "".b
+        loop do
+          begin
+            buffer << io.readpartial(4096).b
+          rescue EOFError, Errno::EIO
+            break
+          end
+          while (newline = buffer.index("\n"))
+            yield(buffer.slice!(0..newline).force_encoding(Encoding.default_external))
+          end
+        end
+        yield(buffer.force_encoding(Encoding.default_external)) unless buffer.empty?
       end
     end
   end

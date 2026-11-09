@@ -81,7 +81,7 @@ describe FastlaneCore do
       ]
       allow(FastlaneCore::CommandExecutor).to receive(:execute).and_call_original
       allow(FastlaneCore::CommandExecutor).to receive(:execute).with(hash_including(command: 'sw_vers -productVersion')).and_return('15.0')
-      allow(FastlaneCore::FastlanePty).to receive(:spawn).with(start_with("xcrun simctl spawn #{device.udid} log collect")).and_yield(error_output, nil, nil).and_return(149)
+      allow(FastlaneCore::FastlanePty).to receive(:spawn).with(start_with("xcrun simctl spawn #{device.udid} log collect")).and_yield(StringIO.new(error_output.join("\n")), nil, nil).and_return(149)
 
       expect(UI).to receive(:important).with("Unable to collect system logs from #{device} (exit status 149): #{error_output.join("\n")}")
 
@@ -102,7 +102,7 @@ describe FastlaneCore do
       error_output = ["Invalid device: #{device.udid}"]
       allow(FastlaneCore::CommandExecutor).to receive(:execute).and_call_original
       allow(FastlaneCore::CommandExecutor).to receive(:execute).with(hash_including(command: 'sw_vers -productVersion')).and_return('15.0')
-      allow(FastlaneCore::FastlanePty).to receive(:spawn).with(start_with("xcrun simctl spawn #{device.udid} log collect")).and_yield(error_output, nil, nil).and_return(148)
+      allow(FastlaneCore::FastlanePty).to receive(:spawn).with(start_with("xcrun simctl spawn #{device.udid} log collect")).and_yield(StringIO.new(error_output.join("\n")), nil, nil).and_return(148)
 
       expect(UI).not_to(receive(:important))
 
